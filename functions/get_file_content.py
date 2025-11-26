@@ -14,7 +14,7 @@ def get_file_content(working_directory, file_path):
         with open(target_file_path, 'r') as file:
             content = file.read()
             if len(content) > MAX_CHARS:
-                content = content[:MAX_CHARS] + "[...File {file_path} truncated at 1000 characters]"
+                content = content[:MAX_CHARS] + f'"[...File "{file_path}" truncated at 1000 characters]"'
     except Exception as e:
         return(f"Error: {e}")
 
