@@ -1,3 +1,23 @@
+from google.genai import types
+
+schema_write_file = types.FunctionDeclaration(
+    name="write_file",
+    description="Writes to a file in the specified directory as a subprocess, constrained to the working directory.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The file path of the file to write to, relative to the working directory. If not provided or file not found, returns an error.",
+            ),
+            "content": types.Schema(
+                type=types.Type.STRING,
+                description="The content to write to the file. If not provided or file not found, returns an error.",
+            ),
+        },
+    ),
+)
+
 def write_file(working_directory, file_path, content):
     import os
 
@@ -18,6 +38,6 @@ def write_file(working_directory, file_path, content):
         with open(full_path, 'w') as file:
             file.write(content)
 
-        return f'Successfully wrote to "{file_path}" ({len(content)} characters written)'
+        return f'Successfully wrote to "{file_path}" ({len(content)} characters written)\n{content}'
     except Exception as e:
         return f"Error writing file: {e}"

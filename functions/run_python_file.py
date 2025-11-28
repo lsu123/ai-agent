@@ -1,10 +1,39 @@
+from google.genai import types
+
+schema_run_python_file = types.FunctionDeclaration(
+    name="run_python_file",
+    description="Runs a Python file in the specified directory as a subprocess, constrained to the working directory.",
+    parameters=types.Schema(
+        type=types.Type.OBJECT,
+        properties={
+            "file_path": types.Schema(
+                type=types.Type.STRING,
+                description="The file path of the file to run, relative to the working directory. If not provided or file not found, returns an error.",
+            ),
+        },
+    ),
+)
+
 def run_python_file(working_directory, file_path, args=[]):
     import os
     import subprocess
     import sys
 
     # Construct the full path to the Python file
-    full_path = os.path.join(working_directory, file_path)
+    #full_path = os.path.join(working_directory, file_path)
+
+    #print(file_path)
+    #print(working_directory)
+    '''
+    if file_path == "tests.py":
+        full_path = os.path.join(working_directory, file_path)
+    else:
+        full_path = file_path
+    '''
+    full_path = os.path.abspath(os.path.join(working_directory, file_path))
+
+    #print(full_path)
+    #print(args)
 
     if not os.path.abspath(full_path).startswith(os.path.abspath(working_directory)):
         return f'Error: Cannot execute "{file_path}" as it is outside the permitted working directory'
