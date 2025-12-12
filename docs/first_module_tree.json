@@ -1,0 +1,48 @@
+{
+    "cli_interface": {
+        "path": "venv_codewiki/lib/python3.12/site-packages/codewiki/cli",
+        "components": [
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.cli.models.config.Configuration",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.cli.utils.progress.ModuleProgressBar"
+        ],
+        "children": {}
+    },
+    "dependency_analysis_core": {
+        "path": "venv_codewiki/lib/python3.12/site-packages/codewiki/src/be/dependency_analyzer",
+        "components": [
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.be.dependency_analyzer.models.core.Node",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.be.dependency_analyzer.models.core.Repository",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.be.dependency_analyzer.models.analysis.NodeSelection"
+        ],
+        "children": {}
+    },
+    "web_application": {
+        "path": "venv_codewiki/lib/python3.12/site-packages/codewiki/src/fe",
+        "components": [
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.config.WebAppConfig",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.routes.WebRoutes",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.background_worker.BackgroundWorker",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.cache_manager.CacheManager",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.github_processor.GitHubRepoProcessor",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.models.RepositorySubmission",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.models.JobStatus",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.fe.models.CacheEntry"
+        ],
+        "children": {}
+    },
+    "shared_utilities": {
+        "path": "venv_codewiki/lib/python3.12/site-packages/codewiki/src",
+        "components": [
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.config.Config",
+            "venv_codewiki.lib.python3.12.site-packages.codewiki.src.utils.FileManager"
+        ],
+        "children": {}
+    },
+    "test_suite": {
+        "path": "calculator",
+        "components": [
+            "calculator.tests.TestCalculator"
+        ],
+        "children": {}
+    }
+}
