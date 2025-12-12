@@ -9,4 +9,7 @@ wheels/
 # Virtual environments
 .venv
 .env
-venv_codewiki
+.venv_codewiki
+
+#codewiki specific files
+docs/temp/dependency_graphs/ai_agent_dependency_graph.json

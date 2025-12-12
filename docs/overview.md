@@ -1,17 +1,16 @@
-# AI-Agent Repository Overview
+# AI Agent Repository Overview
 
 ## Purpose
 
-The **ai-agent** repository (also known as **CodeWiki**) is an intelligent documentation generation system that automatically analyzes code repositories and produces comprehensive, structured documentation using Large Language Models (LLMs). The system provides both command-line and web-based interfaces for transforming complex codebases into navigable, well-organized documentation with minimal manual effort.
+The **ai-agent** repository implements an AI-powered coding assistant system that enables autonomous code analysis, modification, and execution within a secure, sandboxed environment. The system leverages Google's Gemini AI model to provide intelligent code assistance through both command-line and web-based interfaces, with comprehensive dependency analysis capabilities for understanding code structure and relationships.
 
-### Core Capabilities
-
-- **Automated Code Analysis**: Analyzes repository structure, dependencies, and relationships between code components
-- **Intelligent Documentation Generation**: Leverages LLMs to generate human-readable documentation from source code
-- **Multi-Interface Support**: Provides both CLI and web application interfaces for different use cases
-- **Smart Caching**: Implements intelligent caching to avoid redundant documentation generation
-- **GitHub Integration**: Seamlessly processes repositories from GitHub with commit-specific support
-- **Asynchronous Processing**: Background job processing for non-blocking documentation generation
+The repository serves as a complete framework for building AI coding agents that can:
+- Analyze code repositories and generate dependency graphs
+- Read, write, and execute code files within defined boundaries
+- Provide interactive code exploration through web and CLI interfaces
+- Process GitHub repositories for automated documentation and analysis
+- Manage background jobs for long-running analysis tasks
+- Cache analysis results for improved performance
 
 ---
 
@@ -23,472 +22,471 @@ The **ai-agent** repository (also known as **CodeWiki**) is an intelligent docum
 graph TB
     subgraph "User Interfaces"
         CLI[CLI Interface]
-        WEB[Web Application]
+        WebUI[Web Browser]
+    end
+    
+    subgraph "Application Layer"
+        CLIModule[CLI Interface Module]
+        WebFE[Web Frontend Module]
+        MainApp[Main Application]
     end
     
     subgraph "Core Processing"
-        DA[Dependency Analysis Core]
-        DG[Documentation Generator]
-        MC[Module Clusterer]
+        DepAnalysis[Dependency Analysis Module]
+        BgWorker[Background Worker]
+        GitHubProc[GitHub Processor]
     end
     
     subgraph "Infrastructure"
-        SU[Shared Utilities]
-        CM[Cache Manager]
-        BW[Background Worker]
-        GH[GitHub Processor]
+        Config[Core Config Module]
+        Utils[Utilities Module]
+        Cache[Cache Manager]
     end
     
     subgraph "External Services"
-        LLM[LLM API<br/>OpenAI/Anthropic/Local]
-        GITHUB[GitHub Repositories]
+        Gemini[Google Gemini AI]
+        GitHub[GitHub API]
+        FileSystem[File System]
     end
     
-    subgraph "Storage"
-        FS[File System]
-        CACHE[Documentation Cache]
-    end
+    CLI --> CLIModule
+    WebUI --> WebFE
     
-    CLI -->|submits| DA
-    WEB -->|submits| BW
-    BW -->|processes| DA
+    CLIModule --> DepAnalysis
+    CLIModule --> Config
+    CLIModule --> Utils
     
-    DA -->|analyzes| GITHUB
-    DA -->|uses| SU
-    DA -->|generates| DG
+    WebFE --> BgWorker
+    WebFE --> GitHubProc
+    WebFE --> Cache
     
-    DG -->|clusters| MC
-    DG -->|calls| LLM
-    DG -->|stores| FS
+    BgWorker --> DepAnalysis
+    GitHubProc --> DepAnalysis
+    GitHubProc --> GitHub
     
-    BW -->|clones| GH
-    BW -->|caches| CM
-    CM -->|stores| CACHE
+    MainApp --> Gemini
+    MainApp --> Utils
+    MainApp --> Config
     
-    GH -->|fetches| GITHUB
+    DepAnalysis --> FileSystem
+    Utils --> FileSystem
+    Cache --> FileSystem
     
-    style CLI fill:#4A90E2,color:#fff
-    style WEB fill:#4A90E2,color:#fff
-    style DA fill:#E27D60,color:#fff
-    style DG fill:#E27D60,color:#fff
-    style SU fill:#85DCB0,color:#fff
-    style LLM fill:#9C27B0,color:#fff
+    style CLIModule fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style WebFE fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style DepAnalysis fill:#50C878,stroke:#2E7D4E,color:#fff
+    style Config fill:#F39C12,stroke:#C87F0A,color:#fff
+    style Utils fill:#F39C12,stroke:#C87F0A,color:#fff
 ```
 
-### Data Flow Architecture
-
-```mermaid
-flowchart LR
-    subgraph "Input Layer"
-        USER[User Input]
-        REPO[Repository URL/Path]
-    end
-    
-    subgraph "Interface Layer"
-        CLI_IF[CLI Interface]
-        WEB_IF[Web Routes]
-    end
-    
-    subgraph "Processing Layer"
-        VALIDATE[Validation]
-        CACHE_CHECK[Cache Check]
-        CLONE[Repository Clone]
-        ANALYZE[Dependency Analysis]
-        CLUSTER[Module Clustering]
-        GENERATE[Doc Generation]
-    end
-    
-    subgraph "Storage Layer"
-        CACHE_STORE[Cache Storage]
-        FILE_STORE[File Storage]
-    end
-    
-    subgraph "Output Layer"
-        DOCS[Documentation]
-        STATUS[Job Status]
-    end
-    
-    USER --> REPO
-    REPO --> CLI_IF
-    REPO --> WEB_IF
-    
-    CLI_IF --> VALIDATE
-    WEB_IF --> VALIDATE
-    
-    VALIDATE --> CACHE_CHECK
-    CACHE_CHECK -->|Hit| DOCS
-    CACHE_CHECK -->|Miss| CLONE
-    
-    CLONE --> ANALYZE
-    ANALYZE --> CLUSTER
-    CLUSTER --> GENERATE
-    
-    GENERATE --> CACHE_STORE
-    GENERATE --> FILE_STORE
-    GENERATE --> DOCS
-    
-    WEB_IF --> STATUS
-    
-    style USER fill:#FFE5B4
-    style DOCS fill:#90EE90
-    style CACHE_CHECK fill:#FFD700
-```
-
-### Component Interaction Sequence
+### Component Interaction Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant Interface as CLI/Web Interface
-    participant Config as Configuration
-    participant Cache as Cache Manager
-    participant GitHub as GitHub Processor
-    participant Analyzer as Dependency Analyzer
-    participant Generator as Doc Generator
-    participant LLM as LLM Service
-    participant Storage as File Storage
+    participant Config as Core Config
+    participant Analysis as Dependency Analysis
+    participant Utils as Utilities
+    participant AI as Gemini AI
+    participant FS as File System
     
-    User->>Interface: Submit repository
-    Interface->>Config: Load configuration
-    Config-->>Interface: Config ready
+    User->>Interface: Submit Request
+    Interface->>Config: Load Configuration
+    Config-->>Interface: Settings (WORKING_DIR, MAX_CHARS, MAX_ITERS)
     
-    Interface->>Cache: Check cache
-    alt Cache Hit
-        Cache-->>Interface: Return cached docs
-        Interface-->>User: Display documentation
-    else Cache Miss
-        Interface->>GitHub: Clone repository
-        GitHub-->>Interface: Repository ready
-        
-        Interface->>Analyzer: Analyze dependencies
-        Analyzer->>Analyzer: Build dependency graph
-        Analyzer->>Analyzer: Extract components
-        Analyzer-->>Interface: Analysis complete
-        
-        Interface->>Generator: Generate documentation
-        Generator->>LLM: Request doc generation
-        LLM-->>Generator: Generated content
-        Generator->>Storage: Save documentation
-        Generator->>Cache: Update cache
-        Generator-->>Interface: Docs ready
-        
-        Interface-->>User: Display documentation
+    Interface->>Analysis: Analyze Repository
+    Analysis->>Utils: Read Source Files
+    Utils->>Config: Validate Paths
+    Config-->>Utils: Security Boundaries
+    Utils->>FS: Perform File Operations
+    FS-->>Utils: File Content
+    Utils-->>Analysis: Parsed Data
+    
+    Analysis->>Analysis: Build Dependency Graph
+    Analysis->>Analysis: Compute Metrics
+    Analysis-->>Interface: Repository Object
+    
+    alt AI Agent Mode
+        Interface->>AI: Generate Content
+        AI-->>Interface: Function Calls
+        Interface->>Utils: Execute Functions
+        Utils->>FS: File Operations
+        FS-->>Utils: Results
+        Utils-->>Interface: Function Results
+        Interface->>AI: Function Results
+        AI-->>Interface: Next Action
     end
+    
+    Interface-->>User: Display Results
+```
+
+### Data Flow Architecture
+
+```mermaid
+flowchart TD
+    Start([User Request]) --> InputType{Request Type}
+    
+    InputType -->|CLI Command| CLIFlow[CLI Processing]
+    InputType -->|Web Request| WebFlow[Web Processing]
+    InputType -->|AI Agent| AIFlow[AI Agent Loop]
+    
+    CLIFlow --> LoadConfig[Load Configuration]
+    WebFlow --> LoadConfig
+    AIFlow --> LoadConfig
+    
+    LoadConfig --> ValidateInput[Validate Input]
+    ValidateInput --> CheckCache{Cache Available?}
+    
+    CheckCache -->|Yes, Hit| ReturnCached[Return Cached Result]
+    CheckCache -->|No/Miss| ProcessRepo[Process Repository]
+    
+    ProcessRepo --> ScanFiles[Scan Source Files]
+    ScanFiles --> ParseCode[Parse Code]
+    ParseCode --> BuildGraph[Build Dependency Graph]
+    BuildGraph --> ComputeMetrics[Compute Metrics]
+    ComputeMetrics --> CreateRepo[Create Repository Object]
+    
+    CreateRepo --> StoreCache[Store in Cache]
+    StoreCache --> FormatOutput[Format Output]
+    
+    ReturnCached --> FormatOutput
+    FormatOutput --> End([Return Results])
+    
+    style LoadConfig fill:#F39C12,stroke:#C87F0A,color:#fff
+    style ProcessRepo fill:#50C878,stroke:#2E7D4E,color:#fff
+    style CheckCache fill:#4A90E2,stroke:#2E5C8A,color:#fff
+```
+
+### Module Dependency Graph
+
+```mermaid
+graph TB
+    subgraph "Presentation Layer"
+        CLI[CLI Interface Module]
+        WebRoutes[Web Routes]
+    end
+    
+    subgraph "Business Logic Layer"
+        DepAnalyzer[Dependency Analysis Module]
+        BgWorker[Background Worker]
+        GitHubProc[GitHub Processor]
+    end
+    
+    subgraph "Data Layer"
+        CacheManager[Cache Manager]
+        Models[Data Models]
+    end
+    
+    subgraph "Infrastructure Layer"
+        CoreConfig[Core Config Module]
+        Utils[Utilities Module]
+    end
+    
+    CLI --> DepAnalyzer
+    CLI --> CoreConfig
+    CLI --> Utils
+    
+    WebRoutes --> BgWorker
+    WebRoutes --> GitHubProc
+    WebRoutes --> CacheManager
+    
+    BgWorker --> DepAnalyzer
+    GitHubProc --> DepAnalyzer
+    GitHubProc --> Utils
+    
+    CacheManager --> Utils
+    
+    DepAnalyzer --> CoreConfig
+    DepAnalyzer --> Utils
+    
+    BgWorker --> Models
+    CacheManager --> Models
+    
+    style CLI fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style WebRoutes fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style DepAnalyzer fill:#50C878,stroke:#2E7D4E,color:#fff
+    style CoreConfig fill:#F39C12,stroke:#C87F0A,color:#fff
+    style Utils fill:#F39C12,stroke:#C87F0A,color:#fff
 ```
 
 ---
 
-## Core Modules
+## Core Modules Documentation
 
-The ai-agent repository is organized into four primary modules, each serving a distinct purpose in the documentation generation pipeline:
+The ai-agent repository is organized into five core modules, each serving a specific purpose in the system architecture:
 
 ### 1. [CLI Interface Module](cli_interface.md)
+**Location:** `codewiki/cli`
 
-**Purpose**: Provides command-line interface for documentation generation with configuration management and progress tracking.
+Provides the command-line interface for interacting with the CodeWiki system, enabling users to analyze repositories, manage configuration, and track progress through terminal commands.
 
-**Key Components**:
-- `Configuration`: Persistent user settings management
-- `ProgressTracker`: Multi-stage progress tracking with ETA
-- `ModuleProgressBar`: Per-module progress visualization
+**Key Components:**
+- `Configuration` - CLI configuration management
+- `ModuleProgressBar` - Visual progress tracking for terminal
 
-**Primary Responsibilities**:
-- User configuration storage (`~/.codewiki/config.json`)
-- Command-line argument parsing and validation
-- Real-time progress feedback during generation
-- Integration with backend configuration system
-
-**Usage Context**: Ideal for developers who prefer terminal-based workflows, CI/CD integration, and scripted documentation generation.
+**Primary Use Cases:**
+- Command-line repository analysis
+- Configuration management via CLI
+- Progress monitoring for long-running operations
+- Integration with CI/CD pipelines
 
 ---
 
-### 2. [Dependency Analysis Core Module](dependency_analysis_core.md)
+### 2. [Dependency Analysis Module](dependency_analysis.md)
+**Location:** `codewiki/src/be/dependency_analyzer`
 
-**Purpose**: Analyzes code repositories to extract structure, dependencies, and relationships between components.
+The core analytical engine that processes source code repositories to extract structural information, build dependency graphs, and compute code metrics.
 
-**Key Components**:
-- `Node`: Represents code components (functions, classes, methods)
-- `CallRelationship`: Models caller-callee relationships
-- `Repository`: Repository metadata container
-- `AnalysisResult`: Complete analysis output package
-- `NodeSelection`: Selective export configuration
+**Key Components:**
+- `Repository` - Complete repository structure representation
+- `Node` - Individual code component (class, function, module)
+- `NodeSelection` - Filtered subset of nodes for focused analysis
 
-**Primary Responsibilities**:
-- Code structure representation as dependency graphs
-- Relationship tracking between components
-- Source code and metadata extraction
-- Analysis result packaging and serialization
-
-**Usage Context**: Core data foundation used by all other modules for representing analyzed code structure.
+**Primary Use Cases:**
+- Code dependency graph generation
+- Circular dependency detection
+- Code structure analysis
+- Dependency metrics computation
+- Multi-language code parsing
 
 ---
 
-### 3. [Web Application Module](web_application.md)
+### 3. [Web Frontend Module](web_frontend.md)
+**Location:** `codewiki/src/fe`
 
-**Purpose**: Provides web-based interface for repository submission, job tracking, and documentation viewing.
+Provides the web-based user interface and API layer, enabling browser-based interaction with the code analysis system through RESTful endpoints and asynchronous job processing.
 
-**Key Components**:
-- `WebRoutes`: FastAPI route handlers
-- `BackgroundWorker`: Asynchronous job processing
-- `CacheManager`: Documentation caching system
-- `GitHubRepoProcessor`: GitHub integration
-- `WebAppConfig`: Web application configuration
+**Key Components:**
+- `WebRoutes` - HTTP routing and API endpoints
+- `BackgroundWorker` - Asynchronous job processing
+- `CacheManager` - Result caching and optimization
+- `GitHubRepoProcessor` - GitHub integration
+- `WebAppConfig` - Web application configuration
+- `JobStatus` - Job tracking and progress
+- `CacheEntry` - Cache entry management
+- `RepositorySubmission` - Repository submission handling
 
-**Sub-modules**:
-- [Configuration Management](configuration_management.md): Web app settings
-- [Web Routes & API](web_routes_api.md): HTTP endpoints
-- [Background Processing](background_processing.md): Job queue management
-- [Cache Management](cache_management.md): Intelligent caching
-- [GitHub Integration](github_integration.md): Repository operations
-- [Data Models](data_models.md): Request/response models
-
-**Primary Responsibilities**:
-- Web-based repository submission
-- Background job processing and tracking
-- Cache management and retrieval
-- GitHub repository cloning and processing
-- Documentation serving and viewing
-
-**Usage Context**: Ideal for teams, web-based workflows, and users who prefer graphical interfaces.
+**Primary Use Cases:**
+- Web-based code exploration
+- GitHub repository analysis
+- Asynchronous job processing
+- Result caching and retrieval
+- API-based integrations
 
 ---
 
-### 4. [Shared Utilities Module](shared_utilities.md)
+### 4. [Core Config Module](core_config.md)
+**Location:** `codewiki/src/config.py`
 
-**Purpose**: Provides foundational infrastructure for configuration and file operations shared across all modules.
+Central configuration hub that defines runtime parameters, security boundaries, and operational constraints for the entire system.
 
-**Key Components**:
-- `Config`: Unified configuration management
-- `FileManager`: Standardized file I/O operations
+**Key Components:**
+- `Config` - Configuration management class
 
-**Primary Responsibilities**:
-- Context-aware configuration (CLI vs. Web)
-- LLM API configuration management
-- Directory structure management
-- JSON and text file operations
-- Environment variable handling
+**Configuration Parameters:**
+- `MAX_CHARS` - Maximum file read size (default: 10,000 characters)
+- `WORKING_DIR` - Sandboxed working directory (default: "./calculator")
+- `MAX_ITERS` - Maximum AI agent iterations (default: 20)
 
-**Usage Context**: Foundation module used by all other modules for configuration and file operations.
+**Primary Use Cases:**
+- Security boundary enforcement
+- Resource limit management
+- Environment-specific configuration
+- System-wide parameter control
 
 ---
 
-## Module Dependency Graph
+### 5. [Utilities Module](utilities.md)
+**Location:** `codewiki/src/utils.py`
+
+Provides secure, sandboxed file system operations that enable the AI agent to interact with code files while maintaining strict security boundaries.
+
+**Key Components:**
+- `FileManager` - File system operations manager
+
+**Core Functions:**
+- `get_files_info` - Directory listing with file metadata
+- `get_file_content` - Secure file reading with size limits
+- `write_file` - File writing with directory creation
+- `run_python_file` - Python script execution with timeout
+
+**Primary Use Cases:**
+- Secure file system access
+- Code file reading and writing
+- Python script execution
+- Directory exploration
+- Path validation and sandboxing
+
+---
+
+## System Integration
+
+### Configuration Flow
 
 ```mermaid
-graph TD
-    subgraph "User-Facing Modules"
-        CLI[CLI Interface Module]
-        WEB[Web Application Module]
-    end
+graph LR
+    EnvVars[Environment Variables] --> CoreConfig[Core Config]
+    ConfigFiles[Config Files] --> CoreConfig
+    Defaults[System Defaults] --> CoreConfig
     
-    subgraph "Core Processing Modules"
-        DAC[Dependency Analysis Core]
-    end
+    CoreConfig --> CLIConfig[CLI Configuration]
+    CoreConfig --> WebConfig[Web App Config]
+    CoreConfig --> AnalysisConfig[Analysis Config]
     
-    subgraph "Infrastructure Modules"
-        SU[Shared Utilities Module]
-    end
+    CLIConfig --> CLIModule[CLI Interface]
+    WebConfig --> WebFE[Web Frontend]
+    AnalysisConfig --> DepAnalysis[Dependency Analysis]
     
-    CLI -->|uses config| SU
-    CLI -->|uses models| DAC
-    CLI -->|triggers analysis| DAC
-    
-    WEB -->|uses config| SU
-    WEB -->|uses models| DAC
-    WEB -->|triggers analysis| DAC
-    WEB -->|uses file ops| SU
-    
-    DAC -->|uses config| SU
-    DAC -->|uses file ops| SU
-    
-    style CLI fill:#4A90E2,color:#fff
-    style WEB fill:#4A90E2,color:#fff
-    style DAC fill:#E27D60,color:#fff
-    style SU fill:#85DCB0,color:#fff
+    style CoreConfig fill:#F39C12,stroke:#C87F0A,color:#fff
 ```
 
----
-
-## System Workflows
-
-### CLI Documentation Generation Workflow
+### Security Architecture
 
 ```mermaid
-flowchart TD
-    START([User runs CLI command]) --> INIT[Load CLI Configuration]
-    INIT --> VALIDATE[Validate settings]
-    VALIDATE --> CREATE_CONFIG[Create Backend Config]
-    CREATE_CONFIG --> START_PROGRESS[Initialize Progress Tracker]
+graph TB
+    subgraph "Security Layers"
+        Input[User Input] --> PathValidation[Path Validation]
+        PathValidation --> SandboxCheck{Within WORKING_DIR?}
+        
+        SandboxCheck -->|No| Reject[Reject Access]
+        SandboxCheck -->|Yes| ResourceCheck[Resource Limits]
+        
+        ResourceCheck --> SizeCheck{Size < MAX_CHARS?}
+        ResourceCheck --> TimeCheck{Time < Timeout?}
+        ResourceCheck --> IterCheck{Iterations < MAX_ITERS?}
+        
+        SizeCheck -->|Yes| Execute[Execute Operation]
+        TimeCheck -->|Yes| Execute
+        IterCheck -->|Yes| Execute
+        
+        SizeCheck -->|No| Truncate[Truncate/Limit]
+        TimeCheck -->|No| Timeout[Timeout Error]
+        IterCheck -->|No| MaxIters[Max Iterations Error]
+        
+        Execute --> Result[Return Result]
+        Truncate --> Result
+    end
     
-    START_PROGRESS --> STAGE1[Stage 1: Dependency Analysis]
-    STAGE1 --> STAGE2[Stage 2: Module Clustering]
-    STAGE2 --> STAGE3[Stage 3: Doc Generation]
-    STAGE3 --> STAGE4[Stage 4: HTML Generation]
-    STAGE4 --> STAGE5[Stage 5: Finalization]
-    
-    STAGE5 --> SAVE[Save Documentation]
-    SAVE --> END([Documentation Complete])
-    
-    style START fill:#4CAF50,color:#fff
-    style END fill:#4CAF50,color:#fff
-    style STAGE3 fill:#FF9800,color:#fff
+    style SandboxCheck fill:#FFB74D,stroke:#F57C00,color:#fff
+    style Reject fill:#E74C3C,stroke:#C0392B,color:#fff
+    style Execute fill:#50C878,stroke:#2E7D4E,color:#fff
 ```
-
-### Web Application Workflow
-
-```mermaid
-flowchart TD
-    START([User submits repository]) --> VALIDATE[Validate GitHub URL]
-    VALIDATE --> CACHE_CHECK{Check Cache}
-    
-    CACHE_CHECK -->|Hit| SERVE[Serve Cached Docs]
-    CACHE_CHECK -->|Miss| QUEUE[Add to Job Queue]
-    
-    QUEUE --> WORKER[Background Worker Picks Up]
-    WORKER --> CLONE[Clone Repository]
-    CLONE --> ANALYZE[Analyze Dependencies]
-    ANALYZE --> GENERATE[Generate Documentation]
-    GENERATE --> CACHE_STORE[Store in Cache]
-    CACHE_STORE --> UPDATE_STATUS[Update Job Status]
-    UPDATE_STATUS --> SERVE
-    
-    SERVE --> END([Display Documentation])
-    
-    style START fill:#4CAF50,color:#fff
-    style END fill:#4CAF50,color:#fff
-    style CACHE_CHECK fill:#FFD700
-    style WORKER fill:#FF9800,color:#fff
-```
-
----
-
-## Key Features
-
-### 1. Dual Interface Support
-- **CLI**: Terminal-based workflow with progress tracking
-- **Web**: Browser-based interface with job tracking
-
-### 2. Intelligent Caching
-- SHA-256 hash-based cache indexing
-- Configurable expiration (default: 365 days)
-- Automatic cache validation and cleanup
-
-### 3. Asynchronous Processing
-- Non-blocking background job execution
-- Queue-based job management
-- Real-time status updates
-
-### 4. LLM Integration
-- Support for multiple LLM providers (OpenAI, Anthropic, local)
-- Configurable models for different tasks
-- Fallback model support
-
-### 5. GitHub Integration
-- URL validation and normalization
-- Commit-specific documentation
-- Shallow cloning for efficiency
-
-### 6. Comprehensive Analysis
-- Dependency graph construction
-- Module clustering
-- Relationship tracking
-- Metadata extraction
-
----
-
-## Configuration Management
-
-### CLI Configuration
-- Stored in `~/.codewiki/config.json`
-- Persistent user preferences
-- API key management via keyring
-
-### Web Application Configuration
-- Environment variable based
-- Runtime configuration injection
-- Separate cache and temp directories
-
-### Shared Configuration
-- Unified `Config` class
-- Context-aware settings
-- LLM endpoint configuration
-
----
-
-## Technology Stack
-
-### Core Technologies
-- **Python 3.12+**: Primary programming language
-- **FastAPI**: Web framework for REST API
-- **Pydantic**: Data validation and serialization
-- **Click**: CLI framework
-
-### External Services
-- **LLM APIs**: OpenAI, Anthropic, or local LLM endpoints
-- **GitHub**: Repository hosting and access
-
-### Storage
-- **File System**: Documentation and cache storage
-- **JSON**: Configuration and data serialization
 
 ---
 
 ## Getting Started
 
-### CLI Usage
-```bash
-# Initialize configuration
-codewiki init
+### Quick Start Guide
 
-# Generate documentation
-codewiki generate /path/to/repo --verbose
+1. **Installation**
+   ```bash
+   git clone <repository-url>
+   cd ai-agent
+   pip install -r requirements.txt
+   ```
 
-# Update configuration
-codewiki config set main_model gpt-4-turbo
-```
+2. **Configuration**
+   ```python
+   # Edit codewiki/src/config.py
+   MAX_CHARS = 10000
+   WORKING_DIR = "./your-project"
+   MAX_ITERS = 20
+   ```
 
-### Web Application Usage
-```bash
-# Start web server
-python -m codewiki.web
+3. **CLI Usage**
+   ```bash
+   # Analyze a repository
+   python -m codewiki.cli analyze ./path/to/repo
+   
+   # View configuration
+   python -m codewiki.cli config list
+   ```
 
-# Access at http://localhost:8000
-# Submit repository URL via web form
-```
+4. **Web Interface**
+   ```bash
+   # Start web server
+   python -m codewiki.src.fe.app
+   
+   # Access at http://localhost:5000
+   ```
 
----
+### Module Navigation
 
-## Module Reference Summary
-
-| Module | Primary Purpose | Key Components | Documentation |
-|--------|----------------|----------------|---------------|
-| **CLI Interface** | Command-line interface | Configuration, ProgressTracker | [cli_interface.md](cli_interface.md) |
-| **Dependency Analysis Core** | Code analysis and modeling | Node, Repository, AnalysisResult | [dependency_analysis_core.md](dependency_analysis_core.md) |
-| **Web Application** | Web-based interface | WebRoutes, BackgroundWorker, CacheManager | [web_application.md](web_application.md) |
-| **Shared Utilities** | Common infrastructure | Config, FileManager | [shared_utilities.md](shared_utilities.md) |
-
----
-
-## System Characteristics
-
-### Strengths
-✅ **Automated Documentation**: Minimal manual effort required  
-✅ **Multi-Interface**: CLI and web options for different workflows  
-✅ **Intelligent Caching**: Avoids redundant processing  
-✅ **Asynchronous Processing**: Non-blocking operations  
-✅ **Flexible LLM Support**: Multiple provider options  
-✅ **Comprehensive Analysis**: Deep code understanding  
-
-### Use Cases
-- **Open Source Projects**: Generate documentation for public repositories
-- **Enterprise Codebases**: Document internal code for team knowledge sharing
-- **Code Reviews**: Understand unfamiliar codebases quickly
-- **Onboarding**: Help new developers understand project structure
-- **Documentation Maintenance**: Keep docs in sync with code changes
+- **For CLI users**: Start with [CLI Interface Module](cli_interface.md)
+- **For web developers**: Start with [Web Frontend Module](web_frontend.md)
+- **For code analysis**: Start with [Dependency Analysis Module](dependency_analysis.md)
+- **For configuration**: Start with [Core Config Module](core_config.md)
+- **For file operations**: Start with [Utilities Module](utilities.md)
 
 ---
 
-## Conclusion
+## Key Features
 
-The **ai-agent** (CodeWiki) repository provides a sophisticated, production-ready system for automated code documentation generation. Its modular architecture, dual-interface support, and intelligent processing make it suitable for both individual developers and enterprise teams seeking to maintain high-quality, up-to-date documentation with minimal manual effort.
+### 🔍 Code Analysis
+- Multi-language dependency analysis
+- Circular dependency detection
+- Code metrics computation
+- Dependency graph visualization
 
-For detailed information about specific modules, please refer to the individual module documentation linked throughout this overview.
+### 🌐 Web Interface
+- RESTful API endpoints
+- Asynchronous job processing
+- GitHub repository integration
+- Intelligent result caching
+
+### 🖥️ CLI Interface
+- Command-line repository analysis
+- Configuration management
+- Progress tracking
+- Batch processing support
+
+### 🔒 Security
+- Sandboxed file operations
+- Path traversal prevention
+- Resource consumption limits
+- Execution timeouts
+
+### ⚡ Performance
+- Multi-tier caching
+- Parallel processing
+- Incremental analysis
+- Background job queuing
+
+---
+
+## Architecture Highlights
+
+### Modular Design
+Each module has clear responsibilities and well-defined interfaces, enabling independent development and testing.
+
+### Security-First Approach
+All file operations are validated against security boundaries, preventing unauthorized access and resource exhaustion.
+
+### Scalable Architecture
+Stateless API design and background job processing enable horizontal scaling for production deployments.
+
+### AI Integration
+Seamless integration with Google Gemini AI for intelligent code assistance and automated decision-making.
+
+### Extensible Framework
+Plugin-friendly architecture allows easy addition of new languages, analysis types, and integration points.
+
+---
+
+## Documentation Structure
+
+Each core module includes comprehensive documentation covering:
+- **Architecture**: Component design and interaction patterns
+- **Core Components**: Detailed component specifications
+- **Integration Points**: How modules interact with each other
+- **Data Flow**: Request/response patterns and data transformations
+- **Usage Examples**: Practical code examples and workflows
+- **Best Practices**: Guidelines for effective usage
+- **Security Considerations**: Security features and recommendations
+
+---
+
+## Contributing
+
+For detailed information about each module's implementation, please refer to the individual module documentation linked above. Each document provides in-depth coverage of architecture, components, and usage patterns specific to that module.

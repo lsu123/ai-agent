@@ -1,30 +1,24 @@
 {
     "generation_info": {
-        "timestamp": "2025-12-11T16:52:33.709224",
+        "timestamp": "2025-12-12T10:54:47.463131",
         "main_model": "anthropic/claude-sonnet-4.5",
         "generator_version": "1.0.0",
         "repo_path": "/home/colby/code/github/bootdotdev/ai-agent",
         "commit_id": null
     },
     "statistics": {
-        "total_components": 48799,
-        "leaf_nodes": 12282,
+        "total_components": 52571,
+        "leaf_nodes": 12903,
         "max_depth": 2
     },
     "files_generated": [
         "overview.md",
         "module_tree.json",
         "first_module_tree.json",
-        "data_models.md",
+        "core_config.md",
         "cli_interface.md",
-        "dependency_analysis_core.md",
-        "background_processing.md",
-        "cache_management.md",
-        "web_routes_api.md",
-        "github_integration.md",
-        "shared_utilities.md",
-        "test_suite.md",
-        "web_application.md",
-        "configuration_management.md"
+        "utilities.md",
+        "dependency_analysis.md",
+        "web_frontend.md"
     ]
 }

@@ -2,737 +2,811 @@
 
 ## Overview
 
-The **CLI Interface** module provides the command-line interface layer for CodeWiki, managing user configuration, progress tracking, and the bridge between user-facing CLI commands and the backend documentation generation system. This module serves as the primary interaction point for users running CodeWiki from the command line.
+The CLI Interface module (`codewiki/cli`) provides the command-line interface layer for the CodeWiki system. It serves as the primary entry point for users interacting with the application through terminal commands, offering configuration management and visual progress tracking capabilities for long-running operations.
 
-### Purpose
-
-The CLI Interface module is responsible for:
-
-- **Configuration Management**: Storing and validating persistent user settings (LLM endpoints, models, output preferences)
-- **Progress Visualization**: Providing real-time feedback during documentation generation with stage-based progress tracking
-- **CLI-to-Backend Bridge**: Converting user-friendly CLI configurations to backend runtime configurations
-- **User Experience**: Delivering clear, informative feedback during long-running documentation tasks
-
-### Key Features
-
-- ✅ Persistent configuration storage in `~/.codewiki/config.json`
-- ✅ Multi-stage progress tracking with ETA estimation
-- ✅ Verbose and quiet output modes
-- ✅ Module-by-module progress visualization
-- ✅ Seamless integration with backend [shared_utilities](shared_utilities.md) Config system
-- ✅ Configuration validation and error handling
+This module acts as a bridge between user commands and the underlying system components, orchestrating interactions with the dependency analysis engine, web frontend services, and core configuration systems.
 
 ---
 
-## Architecture Overview
+## Table of Contents
 
-The CLI Interface module consists of two primary sub-modules that work together to provide a seamless command-line experience:
+- [Architecture](#architecture)
+- [Core Components](#core-components)
+- [Configuration Management](#configuration-management)
+- [Progress Tracking](#progress-tracking)
+- [Integration with Other Modules](#integration-with-other-modules)
+- [Data Flow](#data-flow)
+- [Usage Patterns](#usage-patterns)
+- [Dependencies](#dependencies)
+
+---
+
+## Architecture
+
+The CLI Interface module follows a layered architecture pattern, separating concerns between configuration management, user interaction, and progress visualization.
 
 ```mermaid
 graph TB
     subgraph "CLI Interface Module"
-        subgraph "Configuration Management"
-            Config[Configuration]
-            Validation[Validation Utils]
-        end
+        CLI[CLI Entry Point]
+        Config[Configuration]
+        Progress[ModuleProgressBar]
         
-        subgraph "Progress Tracking"
-            ProgressTracker[ProgressTracker]
-            ModuleProgressBar[ModuleProgressBar]
-        end
+        CLI --> Config
+        CLI --> Progress
     end
     
-    subgraph "External Dependencies"
-        Backend[Backend Config<br/>shared_utilities]
-        Keyring[Keyring<br/>API Key Storage]
-        FileSystem[File System<br/>~/.codewiki/]
+    subgraph "External Modules"
+        CoreConfig[Core Config]
+        DepAnalysis[Dependency Analysis]
+        WebFE[Web Frontend]
+        Utils[Utilities]
     end
     
-    subgraph "CLI Commands"
-        InitCmd[codewiki init]
-        GenerateCmd[codewiki generate]
-        ConfigCmd[codewiki config]
-    end
+    Config --> CoreConfig
+    CLI --> DepAnalysis
+    CLI --> WebFE
+    Progress --> Utils
     
-    InitCmd --> Config
-    ConfigCmd --> Config
-    GenerateCmd --> Config
-    GenerateCmd --> ProgressTracker
-    GenerateCmd --> ModuleProgressBar
+    User[User Commands] --> CLI
+    CLI --> Output[Terminal Output]
     
-    Config --> Validation
-    Config --> Backend
-    Config --> Keyring
-    Config --> FileSystem
-    
-    ProgressTracker --> Click[Click Library]
-    ModuleProgressBar --> Click
-    
-    style Config fill:#e1f5ff
-    style ProgressTracker fill:#fff4e1
-    style ModuleProgressBar fill:#fff4e1
-    style Backend fill:#f0f0f0
+    style CLI fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style Config fill:#50C878,stroke:#2E7D4E,color:#fff
+    style Progress fill:#50C878,stroke:#2E7D4E,color:#fff
 ```
 
-### Component Relationships
+### Architectural Principles
+
+1. **Separation of Concerns**: Configuration logic is isolated from progress tracking and command execution
+2. **User-Centric Design**: Provides clear feedback and intuitive command structures
+3. **Modularity**: Components can be used independently or composed together
+4. **Extensibility**: Easy to add new commands and configuration options
+
+---
+
+## Core Components
+
+### Component Hierarchy
 
 ```mermaid
 classDiagram
     class Configuration {
-        +str base_url
-        +str main_model
-        +str cluster_model
-        +str default_output
+        +load_config()
+        +save_config()
         +validate()
-        +to_dict()
-        +from_dict()
-        +is_complete()
-        +to_backend_config()
-    }
-    
-    class ProgressTracker {
-        +int total_stages
-        +int current_stage
-        +float stage_progress
-        +start_stage()
-        +update_stage()
-        +complete_stage()
-        +get_overall_progress()
-        +get_eta()
+        +get_setting(key)
+        +set_setting(key, value)
+        +merge_with_defaults()
     }
     
     class ModuleProgressBar {
-        +int total_modules
-        +int current_module
-        +bool verbose
-        +update()
+        +start()
+        +update(progress)
+        +set_description(text)
         +finish()
+        +reset()
+        +get_current_progress()
     }
     
-    class BackendConfig {
-        +str repo_path
-        +str output_dir
-        +str llm_base_url
-        +str llm_api_key
-        +from_cli()
+    class CLIInterface {
+        -configuration: Configuration
+        -progress_bar: ModuleProgressBar
+        +execute_command()
+        +handle_args()
     }
     
-    Configuration --> BackendConfig : converts to
-    Configuration --> ValidationUtils : uses
-    ProgressTracker --> Click : uses
-    ModuleProgressBar --> Click : uses
+    CLIInterface --> Configuration
+    CLIInterface --> ModuleProgressBar
     
-    note for Configuration "Persistent user settings\nStored in ~/.codewiki/config.json"
-    note for ProgressTracker "5-stage progress tracking\nwith ETA estimation"
-    note for ModuleProgressBar "Per-module progress\nfor documentation generation"
+    note for Configuration "Manages CLI configuration\nsettings and user preferences"
+    note for ModuleProgressBar "Provides visual feedback\nfor long-running operations"
 ```
+
+### Configuration (`codewiki.cli.models.config.Configuration`)
+
+The Configuration component is responsible for managing all CLI-related settings, user preferences, and runtime parameters.
+
+**Key Responsibilities:**
+- Loading and parsing configuration files
+- Validating configuration parameters
+- Providing default values for missing settings
+- Persisting user preferences
+- Managing environment-specific configurations
+
+**Configuration Scope:**
+- CLI command defaults
+- Output formatting preferences
+- Logging levels and destinations
+- Integration endpoints (web frontend, analysis engine)
+- File system paths and working directories
+- Performance tuning parameters
+
+### ModuleProgressBar (`codewiki.cli.utils.progress.ModuleProgressBar`)
+
+The ModuleProgressBar component provides visual feedback for operations that may take significant time to complete.
+
+**Key Responsibilities:**
+- Displaying progress indicators in the terminal
+- Updating progress based on operation status
+- Showing descriptive messages for current operations
+- Managing multiple concurrent progress bars
+- Graceful handling of terminal resize events
+
+**Features:**
+- Real-time progress updates
+- Customizable progress bar styles
+- Support for indeterminate progress (spinners)
+- Module-specific progress tracking
+- Clean terminal output management
 
 ---
 
-## Sub-Modules
+## Configuration Management
 
-### 1. Configuration Management
-
-**File**: `venv_codewiki/lib/python3.12/site-packages/codewiki/cli/models/config.py`
-
-The Configuration Management sub-module handles persistent user settings and provides the bridge to backend configuration.
-
-#### Core Component: Configuration
-
-The `Configuration` class is a dataclass that represents user settings stored in `~/.codewiki/config.json`. It provides:
-
-**Attributes**:
-- `base_url` (str): LLM API base URL (e.g., OpenAI, Anthropic, or local endpoints)
-- `main_model` (str): Primary model for documentation generation
-- `cluster_model` (str): Model for module clustering and analysis
-- `default_output` (str): Default output directory for generated documentation (default: "docs")
-
-**Key Methods**:
-
-| Method | Purpose | Returns |
-|--------|---------|---------|
-| `validate()` | Validates all configuration fields using validation utilities | None (raises on error) |
-| `to_dict()` | Serializes configuration to dictionary for JSON storage | dict |
-| `from_dict(data)` | Deserializes configuration from dictionary | Configuration |
-| `is_complete()` | Checks if all required fields are populated | bool |
-| `to_backend_config()` | Converts CLI config to backend Config for runtime execution | Backend Config |
-
-**Configuration Flow**:
+### Configuration Flow
 
 ```mermaid
 sequenceDiagram
     participant User
     participant CLI
-    participant Configuration
-    participant Validation
+    participant Config
+    participant CoreConfig
     participant FileSystem
-    participant Backend
     
-    User->>CLI: codewiki init
-    CLI->>User: Prompt for settings
-    User->>CLI: Provide base_url, models
-    CLI->>Configuration: Create instance
-    Configuration->>Validation: validate()
-    Validation-->>Configuration: OK
-    Configuration->>FileSystem: Save to ~/.codewiki/config.json
+    User->>CLI: Execute command with options
+    CLI->>Config: Initialize configuration
+    Config->>FileSystem: Check for config file
     
-    User->>CLI: codewiki generate
-    CLI->>FileSystem: Load config.json
-    FileSystem->>Configuration: from_dict()
-    CLI->>Configuration: to_backend_config()
-    Configuration->>Backend: Create Config instance
-    Backend-->>CLI: Ready for generation
+    alt Config file exists
+        FileSystem-->>Config: Return config data
+        Config->>Config: Parse and validate
+    else No config file
+        Config->>Config: Use defaults
+    end
+    
+    Config->>CoreConfig: Merge with core config
+    CoreConfig-->>Config: Return merged config
+    
+    CLI->>Config: Get runtime settings
+    Config-->>CLI: Return settings
+    
+    CLI->>CLI: Execute command logic
+    
+    opt Save preferences
+        CLI->>Config: Update settings
+        Config->>FileSystem: Persist configuration
+    end
+    
+    CLI-->>User: Command output
 ```
 
-**Integration with Backend**:
+### Configuration Hierarchy
 
-The `to_backend_config()` method bridges the gap between persistent CLI settings and runtime backend configuration:
+The CLI configuration system follows a hierarchical approach:
 
-```python
-# CLI Configuration (persistent)
-cli_config = Configuration(
-    base_url="https://api.openai.com/v1",
-    main_model="gpt-4",
-    cluster_model="gpt-3.5-turbo",
-    default_output="docs"
-)
+1. **System Defaults**: Built-in default values
+2. **Global Configuration**: System-wide settings from [core_config](core_config.md)
+3. **User Configuration**: User-specific preferences
+4. **Command-Line Arguments**: Runtime overrides with highest priority
 
-# Convert to Backend Config (runtime)
-backend_config = cli_config.to_backend_config(
-    repo_path="/path/to/repo",
-    output_dir="./docs",
-    api_key="sk-..."  # Retrieved from keyring
-)
+```mermaid
+graph LR
+    A[System Defaults] --> B[Global Config]
+    B --> C[User Config]
+    C --> D[CLI Arguments]
+    D --> E[Final Configuration]
+    
+    style E fill:#4A90E2,stroke:#2E5C8A,color:#fff
 ```
-
-This conversion ensures that:
-- User preferences are preserved across sessions
-- Runtime parameters (repo path, API keys) are injected at execution time
-- Backend receives a complete, validated configuration
-
-**Related**: See [shared_utilities](shared_utilities.md) for the backend `Config` class implementation.
 
 ---
 
-### 2. Progress Tracking
+## Progress Tracking
 
-**File**: `venv_codewiki/lib/python3.12/site-packages/codewiki/cli/utils/progress.py`
+### Progress Bar Architecture
 
-The Progress Tracking sub-module provides real-time feedback during documentation generation, which can be a time-consuming process.
-
-#### Core Component: ProgressTracker
-
-The `ProgressTracker` class implements a 5-stage progress tracking system with time estimation.
-
-**Stage Breakdown**:
-
-| Stage | Name | Weight | Description |
-|-------|------|--------|-------------|
-| 1 | Dependency Analysis | 40% | Analyzing code dependencies and building the dependency graph |
-| 2 | Module Clustering | 20% | Grouping related components into logical modules |
-| 3 | Documentation Generation | 30% | Generating markdown documentation using LLMs |
-| 4 | HTML Generation | 5% | Converting markdown to HTML (optional) |
-| 5 | Finalization | 5% | Cleanup and final processing |
-
-**Key Methods**:
-
-| Method | Purpose | Parameters |
-|--------|---------|------------|
-| `start_stage(stage, description)` | Begin a new stage | stage number (1-5), optional description |
-| `update_stage(progress, message)` | Update progress within stage | progress (0.0-1.0), optional message |
-| `complete_stage(message)` | Mark stage as complete | optional completion message |
-| `get_overall_progress()` | Calculate total progress | Returns float (0.0-1.0) |
-| `get_eta()` | Estimate time remaining | Returns formatted string |
-
-**Progress Calculation**:
-
-The overall progress is calculated as a weighted sum:
-
-```
-Overall Progress = Σ(completed_stage_weights) + (current_stage_weight × stage_progress)
+```mermaid
+stateDiagram-v2
+    [*] --> Initialized: Create progress bar
+    Initialized --> Running: start()
+    Running --> Running: update(progress)
+    Running --> Paused: pause()
+    Paused --> Running: resume()
+    Running --> Completed: finish()
+    Completed --> [*]
+    
+    Running --> Error: Exception
+    Error --> [*]
 ```
 
-**Output Modes**:
+### Multi-Module Progress Tracking
 
-1. **Verbose Mode** (`verbose=True`):
-   ```
-   [00:15] Phase 1/5: Dependency Analysis
-   [00:16]   Analyzing module: core.models
-   [00:18]   Analyzing module: core.utils
-   [00:20]   Dependency Analysis complete (5.2s)
-   ```
+When processing multiple modules (e.g., analyzing dependencies across modules), the progress bar system provides hierarchical tracking:
 
-2. **Quiet Mode** (`verbose=False`):
-   ```
-   [1/5] Dependency Analysis
-   [2/5] Module Clustering
-   ```
-
-#### Core Component: ModuleProgressBar
-
-The `ModuleProgressBar` class provides granular progress tracking for module-by-module documentation generation.
-
-**Features**:
-- Progress bar with percentage and ETA (quiet mode)
-- Per-module status messages (verbose mode)
-- Cache hit indicators (shows when modules are loaded from cache vs. regenerated)
-
-**Usage Example**:
-
-```python
-# Initialize for 10 modules
-progress = ModuleProgressBar(total_modules=10, verbose=False)
-
-# Update for each module
-progress.update("core_module", cached=False)  # Generating
-progress.update("utils_module", cached=True)   # From cache
-
-# Finish
-progress.finish()
+```mermaid
+graph TD
+    Main[Main Progress: Overall Operation]
+    Main --> M1[Module 1 Progress]
+    Main --> M2[Module 2 Progress]
+    Main --> M3[Module 3 Progress]
+    
+    M1 --> T1[Task 1.1]
+    M1 --> T2[Task 1.2]
+    
+    M2 --> T3[Task 2.1]
+    M2 --> T4[Task 2.2]
+    
+    M3 --> T5[Task 3.1]
+    M3 --> T6[Task 3.2]
+    
+    style Main fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style M1 fill:#50C878,stroke:#2E7D4E,color:#fff
+    style M2 fill:#50C878,stroke:#2E7D4E,color:#fff
+    style M3 fill:#50C878,stroke:#2E7D4E,color:#fff
 ```
 
-**Output Examples**:
+---
 
-*Quiet Mode*:
-```
-Generating modules  [################------------]  55%  ETA: 00:02:15
+## Integration with Other Modules
+
+### Module Dependencies
+
+```mermaid
+graph TB
+    CLI[CLI Interface]
+    
+    CLI -->|Configuration| CoreConfig[Core Config Module]
+    CLI -->|File Operations| Utils[Utilities Module]
+    CLI -->|Analysis Commands| DepAnalysis[Dependency Analysis Module]
+    CLI -->|Web Commands| WebFE[Web Frontend Module]
+    
+    CoreConfig -->|Base Settings| CLI
+    Utils -->|File Management| CLI
+    DepAnalysis -->|Analysis Results| CLI
+    WebFE -->|Service Status| CLI
+    
+    style CLI fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    
+    click CoreConfig href "core_config.md" "Core Configuration Module"
+    click Utils href "utilities.md" "Utilities Module"
+    click DepAnalysis href "dependency_analysis.md" "Dependency Analysis Module"
+    click WebFE href "web_frontend.md" "Web Frontend Module"
 ```
 
-*Verbose Mode*:
-```
-  [1/10] core_module... ⟳ (generating)
-  [2/10] utils_module... ✓ (cached)
-  [3/10] api_module... ⟳ (generating)
-```
+### Integration Points
+
+#### With Core Config Module
+- Inherits base configuration schema from [core_config](core_config.md)
+- Extends configuration with CLI-specific settings
+- Validates configuration against core constraints
+
+#### With Utilities Module
+- Uses FileManager from [utilities](utilities.md) for file operations
+- Leverages utility functions for path resolution
+- Integrates with logging utilities
+
+#### With Dependency Analysis Module
+- Triggers dependency analysis operations via [dependency_analysis](dependency_analysis.md)
+- Receives Repository and Node data for display
+- Processes NodeSelection results for output formatting
+
+#### With Web Frontend Module
+- Can start/stop web services from [web_frontend](web_frontend.md)
+- Monitors BackgroundWorker job status
+- Manages CacheManager operations
+- Submits repositories for processing via GitHubRepoProcessor
 
 ---
 
 ## Data Flow
 
-### Configuration Lifecycle
+### Command Execution Flow
+
+```mermaid
+flowchart TD
+    Start([User Input]) --> Parse[Parse Command & Arguments]
+    Parse --> LoadConfig[Load Configuration]
+    LoadConfig --> Validate[Validate Parameters]
+    
+    Validate -->|Invalid| Error[Display Error]
+    Error --> End([Exit])
+    
+    Validate -->|Valid| InitProgress[Initialize Progress Bar]
+    InitProgress --> Route{Command Type}
+    
+    Route -->|Analyze| AnalyzeCmd[Execute Analysis Command]
+    Route -->|Web| WebCmd[Execute Web Command]
+    Route -->|Config| ConfigCmd[Execute Config Command]
+    
+    AnalyzeCmd --> CallDepAnalysis[Call Dependency Analysis Module]
+    CallDepAnalysis --> UpdateProgress1[Update Progress]
+    UpdateProgress1 --> FormatResults1[Format Analysis Results]
+    
+    WebCmd --> CallWebFE[Call Web Frontend Module]
+    CallWebFE --> UpdateProgress2[Update Progress]
+    UpdateProgress2 --> FormatResults2[Format Web Response]
+    
+    ConfigCmd --> ModifyConfig[Modify Configuration]
+    ModifyConfig --> SaveConfig[Save Configuration]
+    SaveConfig --> FormatResults3[Format Config Output]
+    
+    FormatResults1 --> Display[Display Results]
+    FormatResults2 --> Display
+    FormatResults3 --> Display
+    
+    Display --> CompleteProgress[Complete Progress Bar]
+    CompleteProgress --> End
+    
+    style Start fill:#90EE90,stroke:#2E7D4E,color:#000
+    style End fill:#FFB6C1,stroke:#8B4C5C,color:#000
+    style Route fill:#FFD700,stroke:#B8860B,color:#000
+```
+
+### Configuration Data Flow
 
 ```mermaid
 flowchart LR
-    subgraph "Initialization"
-        A[User Input] --> B[Configuration]
-        B --> C[Validation]
-        C --> D[~/.codewiki/config.json]
+    subgraph Input Sources
+        CLI_Args[CLI Arguments]
+        Config_File[Config File]
+        Env_Vars[Environment Variables]
+        Defaults[System Defaults]
     end
     
-    subgraph "Generation"
-        E[Load config.json] --> F[Configuration.from_dict]
-        F --> G[Configuration.to_backend_config]
-        G --> H[Backend Config]
-        H --> I[Documentation Generation]
+    subgraph Processing
+        Parser[Argument Parser]
+        Loader[Config Loader]
+        Merger[Config Merger]
+        Validator[Validator]
     end
     
-    subgraph "Updates"
-        J[codewiki config set] --> K[Update Configuration]
-        K --> L[Validate]
-        L --> M[Save config.json]
+    subgraph Output
+        Runtime_Config[Runtime Configuration]
+        Persisted_Config[Persisted Configuration]
     end
     
-    D -.-> E
-    M -.-> E
+    CLI_Args --> Parser
+    Config_File --> Loader
+    Env_Vars --> Loader
+    Defaults --> Merger
     
-    style B fill:#e1f5ff
-    style F fill:#e1f5ff
-    style H fill:#f0f0f0
+    Parser --> Merger
+    Loader --> Merger
+    Merger --> Validator
+    
+    Validator --> Runtime_Config
+    Validator --> Persisted_Config
+    
+    style Runtime_Config fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style Persisted_Config fill:#50C878,stroke:#2E7D4E,color:#fff
 ```
 
-### Progress Tracking Flow
+---
+
+## Usage Patterns
+
+### Common CLI Workflows
+
+#### 1. Repository Analysis Workflow
 
 ```mermaid
 sequenceDiagram
-    participant Gen as Documentation Generator
-    participant PT as ProgressTracker
-    participant MPB as ModuleProgressBar
-    participant UI as User Interface
+    participant User
+    participant CLI
+    participant Config
+    participant Progress
+    participant DepAnalysis
     
-    Gen->>PT: start_stage(1, "Dependency Analysis")
-    PT->>UI: Display stage header
+    User->>CLI: codewiki analyze <repo_path>
+    CLI->>Config: Load configuration
+    Config-->>CLI: Configuration loaded
     
-    loop Dependency Analysis
-        Gen->>PT: update_stage(0.5, "Analyzing...")
-        PT->>UI: Show progress message
-    end
+    CLI->>Progress: Initialize progress bar
+    Progress-->>User: Display: "Starting analysis..."
     
-    Gen->>PT: complete_stage()
-    PT->>UI: Display completion
-    
-    Gen->>PT: start_stage(3, "Documentation Generation")
-    Gen->>MPB: Initialize(total_modules=10)
+    CLI->>DepAnalysis: Analyze repository
     
     loop For each module
-        Gen->>MPB: update(module_name, cached)
-        MPB->>UI: Update progress bar
+        DepAnalysis-->>Progress: Update progress (X%)
+        Progress-->>User: Update display
     end
     
-    Gen->>MPB: finish()
-    Gen->>PT: complete_stage()
+    DepAnalysis-->>CLI: Return Repository object
+    CLI->>CLI: Format results
+    
+    CLI->>Progress: Complete progress bar
+    Progress-->>User: Display: "Analysis complete"
+    
+    CLI-->>User: Display formatted results
 ```
 
----
-
-## Integration Points
-
-### 1. Backend Integration
-
-The CLI Interface integrates with the [shared_utilities](shared_utilities.md) module through the `Configuration.to_backend_config()` method:
+#### 2. Web Service Management Workflow
 
 ```mermaid
-graph LR
-    A[CLI Configuration] -->|to_backend_config| B[Backend Config]
-    B --> C[Documentation Generator]
-    C --> D[Dependency Analyzer]
-    C --> E[Module Clusterer]
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Config
+    participant WebFE
+    participant BgWorker
     
-    style A fill:#e1f5ff
-    style B fill:#f0f0f0
+    User->>CLI: codewiki web start
+    CLI->>Config: Get web configuration
+    Config-->>CLI: Web settings
+    
+    CLI->>WebFE: Start web service
+    WebFE->>BgWorker: Initialize background worker
+    BgWorker-->>WebFE: Worker started
+    WebFE-->>CLI: Service started on port X
+    
+    CLI-->>User: Display: "Web service running at http://localhost:X"
+    
+    Note over User,BgWorker: Service running...
+    
+    User->>CLI: codewiki web status
+    CLI->>WebFE: Get service status
+    WebFE->>BgWorker: Get worker status
+    BgWorker-->>WebFE: Job status
+    WebFE-->>CLI: Service status
+    CLI-->>User: Display status information
 ```
 
-**Key Mappings**:
-- `base_url` → `llm_base_url`
-- `main_model` → `main_model`
-- `cluster_model` → `cluster_model`
-- Runtime parameters (repo_path, output_dir, api_key) are injected during conversion
+#### 3. Configuration Management Workflow
 
-### 2. Dependency Analysis Integration
-
-Progress tracking integrates with the [dependency_analysis_core](dependency_analysis_core.md) module during Stage 1:
-
-```python
-tracker.start_stage(1, "Dependency Analysis")
-# Dependency analyzer runs here
-tracker.update_stage(0.5, "Building dependency graph...")
-tracker.complete_stage(f"Analyzed {node_count} nodes")
+```mermaid
+sequenceDiagram
+    participant User
+    participant CLI
+    participant Config
+    participant FileSystem
+    
+    User->>CLI: codewiki config set output.format json
+    CLI->>Config: Parse setting path
+    Config->>Config: Validate setting
+    
+    alt Valid setting
+        Config->>Config: Update in-memory config
+        Config->>FileSystem: Persist to file
+        FileSystem-->>Config: Saved
+        Config-->>CLI: Success
+        CLI-->>User: Display: "Configuration updated"
+    else Invalid setting
+        Config-->>CLI: Validation error
+        CLI-->>User: Display: "Error: Invalid setting"
+    end
+    
+    User->>CLI: codewiki config get output.format
+    CLI->>Config: Retrieve setting
+    Config-->>CLI: Setting value
+    CLI-->>User: Display: "output.format = json"
 ```
 
-### 3. Web Application Integration
+### Progress Bar Usage Patterns
 
-While the CLI Interface is primarily for command-line usage, the configuration model is shared with the [web_application](web_application.md) module for consistency in LLM settings.
-
----
-
-## Usage Examples
-
-### Example 1: First-Time Setup
-
-```bash
-# Initialize configuration
-$ codewiki init
-
-Welcome to CodeWiki!
-Let's set up your configuration.
-
-LLM API Base URL: https://api.openai.com/v1
-Main Model (for documentation): gpt-4
-Cluster Model (for analysis): gpt-3.5-turbo
-Default Output Directory [docs]: ./documentation
-
-Configuration saved to ~/.codewiki/config.json
-```
-
-### Example 2: Generate Documentation with Progress
-
-```bash
-$ codewiki generate /path/to/repo --verbose
-
-[00:00] Phase 1/5: Dependency Analysis
-[00:02]   Analyzing Python files...
-[00:05]   Building dependency graph...
-[00:08]   Dependency Analysis complete (8.2s)
-
-[00:08] Phase 2/5: Module Clustering
-[00:10]   Clustering 45 components into modules...
-[00:12]   Module Clustering complete (4.1s)
-
-[00:12] Phase 3/5: Documentation Generation
-  [1/8] core_module... ⟳ (generating)
-  [2/8] utils_module... ✓ (cached)
-  [3/8] api_module... ⟳ (generating)
-  ...
-[00:45]   Documentation Generation complete (33.2s)
-
-[00:45] Phase 4/5: HTML Generation
-[00:47]   HTML Generation complete (2.1s)
-
-[00:47] Phase 5/5: Finalization
-[00:48]   Finalization complete (1.0s)
-
-✓ Documentation generated successfully in ./docs
-```
-
-### Example 3: Update Configuration
-
-```bash
-# Update a specific setting
-$ codewiki config set main_model gpt-4-turbo
-
-✓ Configuration updated: main_model = gpt-4-turbo
-
-# View current configuration
-$ codewiki config show
-
-Current Configuration:
-  Base URL: https://api.openai.com/v1
-  Main Model: gpt-4-turbo
-  Cluster Model: gpt-3.5-turbo
-  Default Output: docs
-```
-
----
-
-## Configuration File Format
-
-The configuration is stored in JSON format at `~/.codewiki/config.json`:
-
-```json
-{
-  "base_url": "https://api.openai.com/v1",
-  "main_model": "gpt-4",
-  "cluster_model": "gpt-3.5-turbo",
-  "default_output": "docs"
-}
-```
-
-**Security Note**: API keys are NOT stored in the configuration file. They are managed separately using the system keyring for security.
-
----
-
-## Error Handling
-
-### Configuration Validation
-
-The Configuration class validates settings before saving:
-
-```python
-try:
-    config.validate()
-except ConfigurationError as e:
-    click.secho(f"✗ Invalid configuration: {e}", fg="red")
-    sys.exit(1)
-```
-
-**Validation Checks**:
-- ✅ `base_url`: Must be a valid URL format
-- ✅ `main_model`: Must be a non-empty string
-- ✅ `cluster_model`: Must be a non-empty string
-- ✅ `default_output`: Must be a valid directory path
-
-### Progress Tracking Error Handling
-
-Progress tracking is designed to be non-blocking:
-
-```python
-try:
-    tracker.update_stage(0.5, "Processing...")
-except Exception as e:
-    # Log error but continue generation
-    logger.warning(f"Progress update failed: {e}")
-```
-
----
-
-## Performance Considerations
-
-### Progress Tracking Overhead
-
-- **Minimal Impact**: Progress updates are lightweight (< 1ms per update)
-- **Async-Safe**: Can be called from background threads
-- **Buffered Output**: Uses Click's buffering to minimize I/O overhead
-
-### Configuration Loading
-
-- **Cached**: Configuration is loaded once at startup
-- **Fast Validation**: Validation uses simple regex patterns
-- **Lazy Conversion**: Backend config is created only when needed
-
----
-
-## Design Patterns
-
-### 1. Data Transfer Object (DTO)
-
-The `Configuration` class serves as a DTO between the CLI layer and backend:
-
-```python
-# CLI Layer
-cli_config = Configuration.from_dict(json_data)
-
-# Transfer to Backend
-backend_config = cli_config.to_backend_config(...)
-```
-
-### 2. Builder Pattern
-
-The `to_backend_config()` method acts as a builder, constructing complex backend configurations:
-
-```python
-def to_backend_config(self, repo_path, output_dir, api_key):
-    return Config.from_cli(
-        repo_path=repo_path,
-        output_dir=output_dir,
-        llm_base_url=self.base_url,
-        llm_api_key=api_key,
-        main_model=self.main_model,
-        cluster_model=self.cluster_model
-    )
-```
-
-### 3. Observer Pattern
-
-Progress tracking implements an observer-like pattern where the generator notifies progress trackers:
-
-```python
-# Generator (Subject)
-tracker.start_stage(1)
-# ... do work ...
-tracker.update_stage(0.5)
-# ... more work ...
-tracker.complete_stage()
-
-# Tracker (Observer)
-# Automatically updates UI based on notifications
+```mermaid
+flowchart TD
+    Start[Start Operation] --> CheckDuration{Operation Duration Known?}
+    
+    CheckDuration -->|Yes| Determinate[Use Determinate Progress Bar]
+    CheckDuration -->|No| Indeterminate[Use Indeterminate Progress Bar]
+    
+    Determinate --> SetTotal[Set Total Steps]
+    SetTotal --> Loop1{More Steps?}
+    Loop1 -->|Yes| UpdateDet[Update Progress]
+    UpdateDet --> Loop1
+    Loop1 -->|No| Complete1[Complete Progress]
+    
+    Indeterminate --> StartSpinner[Start Spinner]
+    StartSpinner --> Loop2{Operation Complete?}
+    Loop2 -->|No| UpdateDesc[Update Description]
+    UpdateDesc --> Loop2
+    Loop2 -->|Yes| Complete2[Stop Spinner]
+    
+    Complete1 --> End[End Operation]
+    Complete2 --> End
+    
+    style Start fill:#90EE90,stroke:#2E7D4E,color:#000
+    style End fill:#FFB6C1,stroke:#8B4C5C,color:#000
 ```
 
 ---
 
 ## Dependencies
 
-### External Libraries
+### External Dependencies
 
-- **click**: Command-line interface creation and progress bars
-- **dataclasses**: Configuration data modeling
-- **pathlib**: File path handling
-- **keyring**: Secure API key storage (not shown in provided code)
-
-### Internal Dependencies
-
-- **shared_utilities**: Backend `Config` class for runtime configuration
-- **validation utilities**: URL and model name validation (referenced but not provided)
-
-### Dependency Graph
+The CLI Interface module relies on the following system modules:
 
 ```mermaid
-graph TD
-    CLI[CLI Interface Module] --> Click[Click Library]
-    CLI --> Dataclasses[Python Dataclasses]
-    CLI --> Pathlib[Python Pathlib]
-    CLI --> Keyring[Keyring Library]
+graph LR
+    CLI[CLI Interface Module]
     
-    CLI --> SharedUtils[shared_utilities Module]
-    CLI --> Validation[Validation Utils]
+    subgraph "Direct Dependencies"
+        CoreConfig[Core Config Module]
+        Utils[Utilities Module]
+    end
     
-    SharedUtils --> Config[Backend Config]
+    subgraph "Functional Dependencies"
+        DepAnalysis[Dependency Analysis Module]
+        WebFE[Web Frontend Module]
+    end
     
-    style CLI fill:#e1f5ff
-    style SharedUtils fill:#f0f0f0
+    CLI --> CoreConfig
+    CLI --> Utils
+    CLI -.->|Commands| DepAnalysis
+    CLI -.->|Commands| WebFE
+    
+    CoreConfig --> Config[Config Class]
+    Utils --> FileManager[FileManager Class]
+    
+    DepAnalysis --> Repository[Repository Class]
+    DepAnalysis --> Node[Node Class]
+    DepAnalysis --> NodeSelection[NodeSelection Class]
+    
+    WebFE --> BgWorker[BackgroundWorker]
+    WebFE --> CacheManager[CacheManager]
+    WebFE --> GitHubProcessor[GitHubRepoProcessor]
+    WebFE --> WebConfig[WebAppConfig]
+    
+    style CLI fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style CoreConfig fill:#50C878,stroke:#2E7D4E,color:#fff
+    style Utils fill:#50C878,stroke:#2E7D4E,color:#fff
+```
+
+### Dependency Details
+
+| Module | Components Used | Purpose |
+|--------|----------------|---------|
+| [core_config](core_config.md) | `Config` | Base configuration management and validation |
+| [utilities](utilities.md) | `FileManager` | File system operations and path management |
+| [dependency_analysis](dependency_analysis.md) | `Repository`, `Node`, `NodeSelection` | Repository analysis and dependency graph generation |
+| [web_frontend](web_frontend.md) | `BackgroundWorker`, `CacheManager`, `GitHubRepoProcessor`, `WebAppConfig` | Web service management and repository processing |
+
+### Component Interaction Map
+
+```mermaid
+graph TB
+    subgraph "CLI Interface Components"
+        Config[Configuration]
+        Progress[ModuleProgressBar]
+    end
+    
+    subgraph "Core Config Module"
+        CoreConfig[Config]
+    end
+    
+    subgraph "Utilities Module"
+        FileManager[FileManager]
+    end
+    
+    subgraph "Dependency Analysis Module"
+        Repository[Repository]
+        Node[Node]
+        NodeSelection[NodeSelection]
+    end
+    
+    subgraph "Web Frontend Module"
+        BgWorker[BackgroundWorker]
+        CacheManager[CacheManager]
+        GitHubProcessor[GitHubRepoProcessor]
+        WebAppConfig[WebAppConfig]
+        JobStatus[JobStatus]
+    end
+    
+    Config -->|Extends| CoreConfig
+    Config -->|Uses| FileManager
+    
+    Progress -->|Tracks| Repository
+    Progress -->|Monitors| BgWorker
+    Progress -->|Displays| JobStatus
+    
+    Config -->|Configures| WebAppConfig
+    Config -->|Configures| GitHubProcessor
+    
+    style Config fill:#4A90E2,stroke:#2E5C8A,color:#fff
+    style Progress fill:#4A90E2,stroke:#2E5C8A,color:#fff
 ```
 
 ---
 
-## Testing Considerations
+## Command Structure
 
-### Unit Testing
+### Typical Command Patterns
 
-**Configuration Tests**:
-```python
-def test_configuration_validation():
-    config = Configuration(
-        base_url="https://api.openai.com/v1",
-        main_model="gpt-4",
-        cluster_model="gpt-3.5-turbo"
-    )
-    config.validate()  # Should not raise
+The CLI Interface module likely supports the following command patterns:
 
-def test_configuration_to_backend():
-    cli_config = Configuration(...)
-    backend_config = cli_config.to_backend_config(
-        repo_path="/repo",
-        output_dir="./docs",
-        api_key="test-key"
-    )
-    assert backend_config.llm_api_key == "test-key"
+```
+codewiki <command> [subcommand] [options] [arguments]
 ```
 
-**Progress Tracking Tests**:
-```python
-def test_progress_calculation():
-    tracker = ProgressTracker(total_stages=5)
-    tracker.start_stage(1)
-    tracker.update_stage(0.5)
-    
-    # Stage 1 is 40% of total, at 50% completion
-    assert tracker.get_overall_progress() == 0.20
+#### Analysis Commands
+```bash
+# Analyze a repository
+codewiki analyze <repo_path> [--output <format>] [--depth <level>]
 
-def test_module_progress_bar():
-    progress = ModuleProgressBar(total_modules=10, verbose=True)
-    progress.update("test_module", cached=False)
-    assert progress.current_module == 1
+# Analyze specific modules
+codewiki analyze <repo_path> --modules <module1,module2>
+
+# Generate dependency graph
+codewiki analyze <repo_path> --graph [--format <dot|json|svg>]
 ```
 
-### Integration Testing
+#### Web Service Commands
+```bash
+# Start web service
+codewiki web start [--port <port>] [--host <host>]
 
-Test the full CLI-to-backend flow:
+# Stop web service
+codewiki web stop
 
-```python
-def test_cli_to_backend_integration():
-    # Create CLI config
-    cli_config = Configuration.from_dict({
-        "base_url": "https://api.test.com",
-        "main_model": "test-model",
-        "cluster_model": "test-cluster",
-        "default_output": "docs"
-    })
-    
-    # Convert to backend
-    backend_config = cli_config.to_backend_config(
-        repo_path="/test/repo",
-        output_dir="./output",
-        api_key="test-key"
-    )
-    
-    # Verify mapping
-    assert backend_config.llm_base_url == "https://api.test.com"
-    assert backend_config.main_model == "test-model"
+# Check service status
+codewiki web status
+
+# Process repository via web interface
+codewiki web process <github_url>
 ```
+
+#### Configuration Commands
+```bash
+# View all configuration
+codewiki config list
+
+# Get specific setting
+codewiki config get <key>
+
+# Set configuration value
+codewiki config set <key> <value>
+
+# Reset to defaults
+codewiki config reset [--all]
+```
+
+#### Utility Commands
+```bash
+# Display version information
+codewiki version
+
+# Show help
+codewiki help [command]
+
+# Validate configuration
+codewiki validate
+```
+
+---
+
+## Error Handling
+
+### Error Handling Flow
+
+```mermaid
+flowchart TD
+    Start[Command Execution] --> Try{Try Execute}
+    
+    Try -->|Success| Complete[Complete Successfully]
+    Try -->|Error| Catch[Catch Exception]
+    
+    Catch --> ErrorType{Error Type}
+    
+    ErrorType -->|Config Error| ConfigHandler[Configuration Error Handler]
+    ErrorType -->|Validation Error| ValidationHandler[Validation Error Handler]
+    ErrorType -->|Runtime Error| RuntimeHandler[Runtime Error Handler]
+    ErrorType -->|Unknown Error| UnknownHandler[Unknown Error Handler]
+    
+    ConfigHandler --> LogError1[Log Error Details]
+    ValidationHandler --> LogError2[Log Error Details]
+    RuntimeHandler --> LogError3[Log Error Details]
+    UnknownHandler --> LogError4[Log Error Details]
+    
+    LogError1 --> DisplayUser1[Display User-Friendly Message]
+    LogError2 --> DisplayUser2[Display User-Friendly Message]
+    LogError3 --> DisplayUser3[Display User-Friendly Message]
+    LogError4 --> DisplayUser4[Display User-Friendly Message]
+    
+    DisplayUser1 --> Cleanup[Cleanup Resources]
+    DisplayUser2 --> Cleanup
+    DisplayUser3 --> Cleanup
+    DisplayUser4 --> Cleanup
+    
+    Cleanup --> Exit[Exit with Error Code]
+    Complete --> ExitSuccess[Exit with Success Code]
+    
+    style Start fill:#90EE90,stroke:#2E7D4E,color:#000
+    style Exit fill:#FFB6C1,stroke:#8B4C5C,color:#000
+    style ExitSuccess fill:#90EE90,stroke:#2E7D4E,color:#000
+```
+
+---
+
+## Performance Considerations
+
+### Progress Bar Performance
+
+The ModuleProgressBar is designed to minimize performance impact:
+
+1. **Throttled Updates**: Progress updates are throttled to avoid excessive terminal I/O
+2. **Async Updates**: Progress updates don't block main operation execution
+3. **Efficient Rendering**: Only changed portions of the display are redrawn
+4. **Resource Cleanup**: Proper cleanup of terminal resources on completion
+
+### Configuration Caching
+
+```mermaid
+sequenceDiagram
+    participant CLI
+    participant ConfigCache
+    participant FileSystem
+    
+    CLI->>ConfigCache: Request configuration
+    
+    alt Cache hit
+        ConfigCache-->>CLI: Return cached config
+    else Cache miss
+        ConfigCache->>FileSystem: Load config file
+        FileSystem-->>ConfigCache: Config data
+        ConfigCache->>ConfigCache: Parse and cache
+        ConfigCache-->>CLI: Return config
+    end
+    
+    Note over ConfigCache: Cache invalidated on file change
+```
+
+---
+
+## Best Practices
+
+### Configuration Management
+1. **Use hierarchical configuration**: Override defaults progressively
+2. **Validate early**: Validate configuration before executing commands
+3. **Provide sensible defaults**: Ensure the CLI works out-of-the-box
+4. **Document settings**: Include help text for all configuration options
+
+### Progress Tracking
+1. **Always provide feedback**: Use progress bars for operations > 1 second
+2. **Use appropriate indicators**: Determinate for known duration, indeterminate otherwise
+3. **Update descriptions**: Keep users informed of current operation
+4. **Handle interruptions**: Gracefully handle Ctrl+C and cleanup properly
+
+### Error Handling
+1. **User-friendly messages**: Translate technical errors to actionable messages
+2. **Provide context**: Include relevant details (file paths, settings, etc.)
+3. **Suggest solutions**: When possible, suggest how to fix the error
+4. **Log details**: Log full error details for debugging while showing summary to user
 
 ---
 
 ## Future Enhancements
 
-### Planned Features
+Potential areas for future development:
 
-1. **Configuration Profiles**: Support multiple named configurations (e.g., "openai", "anthropic", "local")
-2. **Progress Persistence**: Save progress state to resume interrupted generations
-3. **Advanced ETA**: Machine learning-based ETA prediction based on repository characteristics
-4. **Interactive Mode**: Real-time progress updates with rich terminal UI
-5. **Configuration Validation**: Enhanced validation with model availability checks
-
-### Extensibility Points
-
-- **Custom Progress Renderers**: Plugin system for different progress visualization styles
-- **Configuration Backends**: Support for environment variables, YAML, TOML formats
-- **Progress Callbacks**: Webhook support for progress notifications
+1. **Interactive Mode**: REPL-style interactive command interface
+2. **Command Aliases**: User-defined command shortcuts
+3. **Plugin System**: Support for third-party command extensions
+4. **Shell Completion**: Auto-completion for bash/zsh/fish
+5. **Configuration Profiles**: Multiple named configuration profiles
+6. **Advanced Progress**: Nested progress bars for complex operations
+7. **Output Templating**: Customizable output formats using templates
+8. **Command History**: Track and replay previous commands
 
 ---
 
-## Related Modules
+## Related Documentation
 
-- **[shared_utilities](shared_utilities.md)**: Backend configuration and file management
-- **[dependency_analysis_core](dependency_analysis_core.md)**: Dependency analysis (Stage 1 of progress tracking)
-- **[web_application](web_application.md)**: Web interface alternative to CLI
+- [Core Config Module](core_config.md) - Base configuration system
+- [Utilities Module](utilities.md) - File management and utilities
+- [Dependency Analysis Module](dependency_analysis.md) - Repository analysis engine
+- [Web Frontend Module](web_frontend.md) - Web interface and services
 
 ---
 
 ## Summary
 
-The CLI Interface module provides a robust, user-friendly command-line experience for CodeWiki:
+The CLI Interface module serves as the primary user interaction layer for the CodeWiki system, providing:
 
-- **Configuration Management**: Persistent, validated user settings with seamless backend integration
-- **Progress Tracking**: Multi-stage progress visualization with accurate ETA estimation
-- **User Experience**: Clear feedback during long-running operations with verbose and quiet modes
-- **Maintainability**: Clean separation between CLI concerns and backend logic
+- **Configuration Management**: Flexible, hierarchical configuration system via the `Configuration` component
+- **Progress Tracking**: Visual feedback for long-running operations via the `ModuleProgressBar` component
+- **Command Orchestration**: Coordination between analysis, web services, and configuration management
+- **User Experience**: Intuitive command structure with helpful error messages and feedback
 
-This module serves as the primary entry point for users interacting with CodeWiki via the command line, ensuring a smooth and informative documentation generation experience.
+The module integrates seamlessly with other system components, leveraging the [core_config](core_config.md) for base configuration, [utilities](utilities.md) for file operations, [dependency_analysis](dependency_analysis.md) for repository analysis, and [web_frontend](web_frontend.md) for web service management.
